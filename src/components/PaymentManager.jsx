@@ -47,6 +47,9 @@ const PaymentManager = () => {
   const [subscriptionToCancel, setSubscriptionToCancel] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showVariablePayment, setShowVariablePayment] = useState(false);
+  const [variablePaymentData, setVariablePaymentData] = useState(null);
+  const [customAmount, setCustomAmount] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
@@ -328,7 +331,7 @@ const PaymentManager = () => {
 
   // Actualizar formData cuando cambie la categoría
   useEffect(() => {
-    if (formData.category === 'suscripciones' || formData.category === 'telefonia') {
+    if (formData.category === 'suscripciones' || formData.category === 'telefonia' || formData.category === 'tarjetas') {
       setFormData(prev => ({
         ...prev,
         isSubscription: true,
@@ -623,6 +626,30 @@ const PaymentManager = () => {
     const payment = payments.find(p => p.id === id);
     if (!payment) return;
 
+    // Si es tarjeta de crédito, verificar si ya pagó este mes
+    if (payment.category === 'tarjetas') {
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      
+      const alreadyPaidThisMonth = payment.paymentHistory?.some(record => {
+        const recordDate = new Date(record.date);
+        return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+      });
+
+      if (alreadyPaidThisMonth) {
+        // Mostrar modal para pago adicional en tarjetas
+        setAdvancedPaymentData({ payment, type: 'additionalPayment' });
+        setShowAdvancedPayment(true);
+        return;
+      }
+
+      // Si no ha pagado este mes, ir directo al modal de pago variable
+      setVariablePaymentData(payment);
+      setCustomAmount(payment.amount.toString());
+      setShowVariablePayment(true);
+      return;
+    }
+
     // Si es suscripción o telefonía, verificar si ya pagó este mes
     if (payment.isSubscription) {
       const currentMonth = new Date().getMonth();
@@ -729,6 +756,49 @@ const PaymentManager = () => {
 
     setShowAdvancedPayment(false);
     setAdvancedPaymentData(null);
+  };
+
+  // Confirmar pago variable para tarjetas
+  const confirmVariablePayment = async () => {
+    const payment = variablePaymentData;
+    const paidAmount = parseInt(customAmount);
+    
+    if (!paidAmount || paidAmount < payment.amount) {
+      alert(`El monto debe ser mayor o igual al pago mínimo de ₲${formatCurrency(payment.amount)}`);
+      return;
+    }
+
+    const currentDate = new Date();
+    const paymentRecord = {
+      date: currentDate.toISOString(),
+      amount: paidAmount,
+      minimumAmount: payment.amount,
+      month: currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }),
+      type: paidAmount === payment.amount ? 'minimum' : 'above_minimum'
+    };
+
+    const updatedPayment = {
+      ...payment,
+      lastPaidAt: currentDate.toISOString(),
+      paymentHistory: [...(payment.paymentHistory || []), paymentRecord]
+    };
+
+    // Actualizar en Firebase
+    const result = await updatePayment(payment.id, {
+      lastPaidAt: updatedPayment.lastPaidAt,
+      paymentHistory: updatedPayment.paymentHistory
+    });
+
+    if (result.success) {
+      // Recargar datos
+      await loadUserData(currentUser.uid);
+    } else {
+      alert('Error al actualizar: ' + result.error);
+    }
+
+    setShowVariablePayment(false);
+    setVariablePaymentData(null);
+    setCustomAmount('');
   };
 
   // Obtener monto pendiente total
@@ -1449,11 +1519,27 @@ const PaymentManager = () => {
                           {/* Historial de pagos */}
                           {payment.paymentHistory && payment.paymentHistory.length > 0 && (
                             <div className="mt-3">
-                              <h4 className="text-xs font-medium text-gray-600 mb-2">📋 Historial de Pagos:</h4>
+                              <h4 className="text-xs font-medium text-gray-600 mb-2">
+                                📋 {payment.category === 'tarjetas' ? 'Historial de Pagos' : 'Historial de Pagos'}:
+                              </h4>
                               <div className="max-h-20 overflow-y-auto">
                                 {payment.paymentHistory.slice(-3).map((record, index) => (
                                   <div key={index} className="text-xs text-gray-500 bg-gray-50 p-1 rounded mb-1">
-                                    • {record.month}: ₲{formatCurrency(record.amount)}
+                                    {payment.category === 'tarjetas' ? (
+                                      <>
+                                        • {record.month}: ₲{formatCurrency(record.amount)}
+                                        {record.type === 'above_minimum' && (
+                                          <span className="text-green-600 ml-1">💪 Sobre mínimo</span>
+                                        )}
+                                        {record.minimumAmount && (
+                                          <span className="text-gray-400 text-xs block">
+                                            (Mínimo: ₲{formatCurrency(record.minimumAmount)})
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <>• {record.month}: ₲{formatCurrency(record.amount)}</>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -1629,7 +1715,10 @@ const PaymentManager = () => {
                   Ya registraste el pago de <strong>{advancedPaymentData?.payment.name}</strong> este mes.
                 </p>
                 <p className="text-sm text-blue-600 font-medium">
-                  ¿Deseas registrar un pago anticipado para el próximo mes?
+                  {advancedPaymentData?.type === 'additionalPayment' 
+                    ? '¿Deseas registrar otro pago más para la tarjeta este mes?'
+                    : '¿Deseas registrar un pago anticipado para el próximo mes?'
+                  }
                 </p>
               </div>
               <div className="flex gap-3">
@@ -1640,10 +1729,97 @@ const PaymentManager = () => {
                   NO
                 </button>
                 <button
-                  onClick={confirmAdvancedPayment}
+                  onClick={() => {
+                    if (advancedPaymentData?.type === 'additionalPayment') {
+                      // Para tarjetas, ir al modal de pago variable
+                      setVariablePaymentData(advancedPaymentData.payment);
+                      setCustomAmount(advancedPaymentData.payment.amount.toString());
+                      setShowVariablePayment(true);
+                      setShowAdvancedPayment(false);
+                    } else {
+                      // Para suscripciones, pago anticipado
+                      confirmAdvancedPayment();
+                    }
+                  }}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
                 >
-                  SÍ, PAGO ANTICIPADO
+                  {advancedPaymentData?.type === 'additionalPayment' ? 'SÍ, PAGAR' : 'SÍ, PAGO ANTICIPADO'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showVariablePayment && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">
+                💳 Pagar Tarjeta de Crédito
+              </h3>
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>{variablePaymentData?.name}</strong>
+                </p>
+                <p className="text-sm text-gray-600 mb-4">
+                  Pago mínimo: <strong>₲{formatCurrency(variablePaymentData?.amount || 0)}</strong>
+                </p>
+                
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Monto a pagar:
+                </label>
+                <input
+                  type="text"
+                  value={formatCurrency(customAmount)}
+                  onChange={(e) => setCustomAmount(parseAmount(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ingrese el monto a pagar"
+                />
+                
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => setCustomAmount(variablePaymentData?.amount.toString())}
+                    className="flex-1 bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg text-sm transition-colors"
+                  >
+                    Pago Mínimo
+                  </button>
+                  <button
+                    onClick={() => setCustomAmount((variablePaymentData?.amount * 2).toString())}
+                    className="flex-1 bg-green-100 hover:bg-green-200 text-green-700 px-3 py-2 rounded-lg text-sm transition-colors"
+                  >
+                    Doble Mínimo
+                  </button>
+                </div>
+                
+                {customAmount && parseInt(customAmount) < variablePaymentData?.amount && (
+                  <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+                    ⚠️ El monto debe ser mayor o igual al pago mínimo
+                  </div>
+                )}
+                
+                {customAmount && parseInt(customAmount) > variablePaymentData?.amount && (
+                  <div className="mt-2 text-xs text-green-600 bg-green-50 p-2 rounded">
+                    ✅ Pago superior al mínimo - Excelente!
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowVariablePayment(false);
+                    setVariablePaymentData(null);
+                    setCustomAmount('');
+                  }}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmVariablePayment}
+                  disabled={!customAmount || parseInt(customAmount) < variablePaymentData?.amount}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Confirmar Pago
                 </button>
               </div>
             </div>
@@ -1720,7 +1896,9 @@ const PaymentManager = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Monto Mensual</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {formData.category === 'tarjetas' ? 'Pago Mínimo Mensual' : 'Monto Mensual'}
+                  </label>
                   <input
                     type="text"
                     value={formatCurrency(formData.amount)}
@@ -1729,10 +1907,17 @@ const PaymentManager = () => {
                       amount: parseAmount(e.target.value)
                     })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Ej: 500.000"
+                    placeholder={
+                      formData.category === 'tarjetas' 
+                        ? 'Ej: 150.000 (pago mínimo)'
+                        : formData.category === 'suscripciones' 
+                        ? 'Ej: Netflix, Spotify, YouTube Music' 
+                        : formData.category === 'telefonia'
+                        ? 'Ej: 200.000 (plan mensual)'
+                        : 'Ej: 500.000'
+                    }
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Día de vencimiento</label>
                   <select
@@ -1826,16 +2011,22 @@ const PaymentManager = () => {
                     <div className="flex items-center gap-2 mb-2">
                       {formData.category === 'telefonia' ? (
                         <Smartphone className="text-blue-600" size={16} />
+                      ) : formData.category === 'tarjetas' ? (
+                        <CreditCard className="text-blue-600" size={16} />
                       ) : (
                         <Music className="text-blue-600" size={16} />
                       )}
                       <span className="text-sm font-medium text-blue-800">
-                        {formData.category === 'telefonia' ? 'Plan Telefónico' : 'Suscripción'}
+                        {formData.category === 'telefonia' ? 'Plan Telefónico' : 
+                        formData.category === 'tarjetas' ? 'Tarjeta de Crédito' : 
+                        'Suscripción'}
                       </span>
                     </div>
                     <p className="text-xs text-blue-700">
                       {formData.category === 'telefonia' 
                         ? 'Los planes telefónicos no tienen cuotas fijas. Puedes cancelar el contrato cuando desees y se mantiene un historial de pagos.'
+                        : formData.category === 'tarjetas'
+                        ? 'Las tarjetas de crédito tienen pago mínimo mensual. El monto que ingreses será el pago mínimo obligatorio, pero puedes pagar más cada mes.'
                         : 'Las suscripciones no tienen cuotas fijas. Puedes marcar cada mes como pagado y cancelar cuando desees.'
                       }
                     </p>
@@ -1850,7 +2041,9 @@ const PaymentManager = () => {
                     onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder={
-                      formData.category === 'suscripciones' 
+                      formData.category === 'tarjetas' 
+                        ? 'Ej: Visa Banco Itaú, límite 2.000.000' 
+                        : formData.category === 'suscripciones' 
                         ? 'Ej: Plan Premium, cuenta familiar' 
                         : formData.category === 'telefonia'
                         ? 'Ej: Plan postpago, línea principal'
