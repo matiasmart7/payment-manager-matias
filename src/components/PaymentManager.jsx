@@ -550,7 +550,7 @@ const PaymentManager = () => {
   };
 
   // Agregar nuevo pago
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name || !formData.amount || !formData.startDate) {
       alert('Por favor completa los campos obligatorios');
       return;
@@ -562,7 +562,6 @@ const PaymentManager = () => {
     }
 
     const newPayment = {
-      id: Date.now(),
       name: formData.name,
       amount: parseInt(formData.amount),
       startDate: formData.startDate,
@@ -574,8 +573,7 @@ const PaymentManager = () => {
       dueDay: parseInt(formData.dueDay),
       isSubscription: formData.isSubscription,
       currentMonthPaid: false,
-      paymentHistory: [], // Historial de pagos para suscripciones y telefonía
-      createdAt: new Date().toISOString()
+      paymentHistory: []
     };
 
     if (!formData.isSubscription) {
@@ -587,41 +585,36 @@ const PaymentManager = () => {
       newPayment.nextPaymentMonth = getMonthName(nextPaymentDate.getMonth());
 
       if (newPayment.paidQuotas >= newPayment.totalQuotas) {
-        setCompletedPayments(prev => [...prev, { ...newPayment, completedAt: new Date().toISOString() }]);
-        setFormData({
-          name: '',
-          amount: '',
-          startDate: '',
-          totalQuotas: '',
-          paymentType: 'new',
-          paidQuotas: 0,
-          firstPaymentMonth: 'current',
-          comments: '',
-          category: 'tarjetas',
-          dueDay: 1,
-          isSubscription: false
-        });
-        setShowForm(false);
-        return;
+        newPayment.completedAt = new Date().toISOString();
       }
     }
 
-    setPayments(prev => [...prev, newPayment]);
-
-    setFormData({
-      name: '',
-      amount: '',
-      startDate: '',
-      totalQuotas: '',
-      paymentType: 'new',
-      paidQuotas: 0,
-      firstPaymentMonth: 'current',
-      comments: '',
-      category: 'tarjetas',
-      dueDay: 1,
-      isSubscription: false
-    });
-    setShowForm(false);
+    // 🔥 GUARDAR EN FIREBASE
+    const result = await savePayment(currentUser.uid, newPayment);
+    
+    if (result.success) {
+      // Recargar datos desde Firebase
+      await loadUserData(currentUser.uid);
+      
+      // Limpiar formulario
+      setFormData({
+        name: '',
+        amount: '',
+        startDate: '',
+        totalQuotas: '',
+        paymentType: 'new',
+        paidQuotas: 0,
+        firstPaymentMonth: 'current',
+        comments: '',
+        category: 'tarjetas',
+        dueDay: 1,
+        isSubscription: false
+      });
+      setShowForm(false);
+    } else {
+      alert('Error al guardar: ' + result.error);
+      console.error('Error:', result.error);
+    }
   };
 
   // Marcar como pagado
