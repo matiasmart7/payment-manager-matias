@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChange, loginUser, logoutUser } from '../services/authService';
+import { getUserPayments, savePayment, updatePayment, deletePayment } from '../services/paymentService';
 import {
   Plus,
   Check,
@@ -43,6 +45,8 @@ const PaymentManager = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showCancelSubscription, setShowCancelSubscription] = useState(false);
   const [subscriptionToCancel, setSubscriptionToCancel] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
@@ -354,6 +358,24 @@ const PaymentManager = () => {
     }
   }, [formData.category]);
 
+  // Agregar este useEffect DESPUÉS de tus otros useEffect
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange((user) => {
+      if (user) {
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+        loadUserData(user.uid);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setPayments([]);
+        setCompletedPayments([]);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);  
   // Función para formatear números con puntos como separadores de miles
   const formatCurrency = (amount) => {
     return parseInt(amount).toLocaleString('es-PY').replace(/,/g, '.');
@@ -423,20 +445,66 @@ const PaymentManager = () => {
   }, []);
 
   // Función de login
-  const handleLogin = () => {
-    if (loginData.username === 'matiasmart7@gmail.com' && loginData.password === 'Matiasmart79+') {
+  const handleLogin = async () => {
+    if (!loginData.username || !loginData.password) {
+      alert('Por favor completa todos los campos');
+      return;
+    }
+
+    const result = await loginUser(loginData.username, loginData.password);
+    
+    if (result.success) {
+      setCurrentUser(result.user);
       setIsAuthenticated(true);
       setLoginData({ username: '', password: '' });
+      // Cargar datos del usuario
+      loadUserData(result.user.uid);
     } else {
-      alert('Usuario o contraseña incorrectos');
+      alert('Error: ' + result.error);
+    }
+  };
+
+  // Agregar esta función junto a handleLogin
+  const handleRegister = async () => {
+    if (!loginData.username || !loginData.password) {
+      alert('Por favor completa todos los campos');
+      return;
+    }
+
+    const { registerUser } = await import('../services/authService');
+    const result = await registerUser(loginData.username, loginData.password);
+    
+    if (result.success) {
+      alert('¡Cuenta creada exitosamente! Ahora puedes iniciar sesión.');
+      setLoginData({ username: '', password: '' });
+    } else {
+      alert('Error al crear cuenta: ' + result.error);
+    }
+  };
+
+  // Nueva función para cargar datos del usuario
+  const loadUserData = async (userId) => {
+    const result = await getUserPayments(userId);
+    if (result.success) {
+      const userPayments = result.payments;
+      const activePayments = userPayments.filter(p => !p.completedAt);
+      const completedPayments = userPayments.filter(p => p.completedAt);
+      
+      setPayments(activePayments);
+      setCompletedPayments(completedPayments);
     }
   };
 
   // Función de logout
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    setShowSettingsMenu(false);
-    clearLocalStorage();
+  const handleLogout = async () => {
+    const result = await logoutUser();
+    if (result.success) {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setPayments([]);
+      setCompletedPayments([]);
+      setShowSettingsMenu(false);
+    }
   };
 
   // Confirmar eliminación
@@ -722,6 +790,16 @@ const PaymentManager = () => {
   };
 
   // Pantalla de login
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  } 
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
@@ -787,6 +865,12 @@ const PaymentManager = () => {
               className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors"
             >
               Iniciar Sesión
+            </button>
+            <button
+              onClick={handleRegister}
+              className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-colors mt-2"
+            >
+              Crear Cuenta
             </button>
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <p className="text-sm text-yellow-800">
