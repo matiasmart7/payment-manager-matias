@@ -326,21 +326,6 @@ const PaymentManager = () => {
     event.target.value = '';
   };
 
-  // 🔄 EFECTOS PARA PERSISTENCIA
-  useEffect(() => {
-    console.log('🚀 Iniciando aplicación...');
-    const dataLoaded = loadFromLocalStorage();
-    if (!dataLoaded) {
-      console.log('📝 No hay datos guardados, iniciando desde cero');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (payments.length > 0 || completedPayments.length > 0 || isAuthenticated) {
-      saveToLocalStorage(payments, completedPayments, isAuthenticated);
-    }
-  }, [payments, completedPayments, isAuthenticated, selectedCategory]);
-
   // Actualizar formData cuando cambie la categoría
   useEffect(() => {
     if (formData.category === 'suscripciones' || formData.category === 'telefonia') {
@@ -484,14 +469,30 @@ const PaymentManager = () => {
 
   // Nueva función para cargar datos del usuario
   const loadUserData = async (userId) => {
-    const result = await getUserPayments(userId);
-    if (result.success) {
-      const userPayments = result.payments;
-      const activePayments = userPayments.filter(p => !p.completedAt);
-      const completedPayments = userPayments.filter(p => p.completedAt);
+    console.log('🔍 Cargando datos para usuario:', userId);
+    
+    try {
+      const result = await getUserPayments(userId);
+      console.log('📊 Resultado de getUserPayments:', result);
       
-      setPayments(activePayments);
-      setCompletedPayments(completedPayments);
+      if (result.success) {
+        const userPayments = result.payments;
+        console.log('📝 Total pagos encontrados:', userPayments.length);
+        console.log('📋 Pagos completos:', userPayments);
+        
+        const activePayments = userPayments.filter(p => !p.completedAt);
+        const completedPayments = userPayments.filter(p => p.completedAt);
+        
+        console.log('✅ Pagos activos:', activePayments.length);
+        console.log('✅ Pagos completados:', completedPayments.length);
+        
+        setPayments(activePayments);
+        setCompletedPayments(completedPayments);
+      } else {
+        console.error('❌ Error cargando datos:', result.error);
+      }
+    } catch (error) {
+      console.error('❌ Error en loadUserData:', error);
     }
   };
 
