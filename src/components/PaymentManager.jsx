@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChange, loginUser, logoutUser } from '../services/authService';
 import { getUserPayments, savePayment, updatePayment, deletePayment } from '../services/paymentService';
-import AdminPanel from './AdminPanel';
+import AdminPanel from './AdminPanel.jsx';
 import { getUserRole } from '../services/adminService';
 import {
   Plus,

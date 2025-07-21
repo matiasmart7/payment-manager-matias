@@ -11,7 +11,7 @@ import {
   query,
   where 
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db } from '../firebase';
 
 // 📋 GESTIÓN DE USUARIOS
 export const getUserRole = async (email) => {
