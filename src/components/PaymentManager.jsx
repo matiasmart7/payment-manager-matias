@@ -750,10 +750,9 @@ const markAsPaid = (id) => {
       
       // 🔥 ACTUALIZAR EN FIREBASE
       const result = await updatePayment(payment.id, {
-        paidQuotas: updatedPayment.paidQuotas,
         currentMonthPaid: true,
-        lastPaidAt: new Date().toISOString(), // ← AGREGAR ESTO
-        nextPaymentMonth: nextPaymentMonth
+        lastPaidAt: updatedPayment.lastPaidAt,
+        paymentHistory: updatedPayment.paymentHistory
       });
 
       if (result.success) {
@@ -772,13 +771,13 @@ const markAsPaid = (id) => {
       const isCompleted = updatedPayment.paidQuotas >= updatedPayment.totalQuotas;
 
       if (isCompleted) {
-        // 🔥 MARCAR COMO COMPLETADO EN FIREBASE
-        const result = await updatePayment(payment.id, {
-          paidQuotas: updatedPayment.paidQuotas,
-          currentMonthPaid: true,
-          lastPaidAt: new Date().toISOString(), // ← AGREGAR ESTO
-          completedAt: new Date().toISOString()
-        });
+      // 🔥 MARCAR COMO COMPLETADO EN FIREBASE
+      const result = await updatePayment(payment.id, {
+        paidQuotas: updatedPayment.paidQuotas,
+        currentMonthPaid: true,
+        lastPaidAt: new Date().toISOString(), // ← AGREGAR ESTO
+        completedAt: new Date().toISOString()
+      });
 
         if (result.success) {
           await loadUserData(currentUser.uid);
@@ -797,6 +796,7 @@ const markAsPaid = (id) => {
         const result = await updatePayment(payment.id, {
           paidQuotas: updatedPayment.paidQuotas,
           currentMonthPaid: true,
+          lastPaidAt: new Date().toISOString(), // ← AGREGAR ESTA LÍNEA
           nextPaymentMonth: nextPaymentMonth
         });
 
