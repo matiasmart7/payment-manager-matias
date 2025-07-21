@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
-// 💾 GUARDAR PAGO - Ahora en subcolección por usuario
+// 💾 GUARDAR PAGO - Usando UID consistente
 export const savePayment = async (userId, paymentData) => {
   console.log('🔥 Firebase: Guardando pago para userId:', userId);
   console.log('🔥 Firebase: Datos del pago:', paymentData);
@@ -31,7 +31,7 @@ export const savePayment = async (userId, paymentData) => {
   }
 };
 
-// 📋 OBTENER PAGOS - Ahora desde subcolección del usuario
+// 📋 OBTENER PAGOS - Usando UID consistente
 export const getUserPayments = async (userId) => {
   console.log('🔥 Firebase: Iniciando getUserPayments para userId:', userId);
   
@@ -60,11 +60,10 @@ export const getUserPayments = async (userId) => {
   }
 };
 
-// ✏️ ACTUALIZAR PAGO - Ahora en subcolección del usuario
+// ✏️ ACTUALIZAR PAGO - CORREGIDO: Usar mismo userId
 export const updatePayment = async (paymentId, updateData) => {
   try {
-    // Necesitamos el userId para la ruta correcta
-    // Lo obtenemos del contexto de autenticación
+    // Obtener userId consistente (UID, no email)
     const { auth } = await import('../firebase');
     const currentUser = auth.currentUser;
     
@@ -72,8 +71,11 @@ export const updatePayment = async (paymentId, updateData) => {
       throw new Error('Usuario no autenticado');
     }
     
+    // USAR UID en lugar de email para consistencia
+    const userId = currentUser.uid;
+    
     // Actualizar en payments/{userId}/userPayments/{paymentId}
-    const paymentRef = doc(db, 'payments', currentUser.email, 'userPayments', paymentId);
+    const paymentRef = doc(db, 'payments', userId, 'userPayments', paymentId);
     await updateDoc(paymentRef, updateData);
     return { success: true };
   } catch (error) {
@@ -81,10 +83,10 @@ export const updatePayment = async (paymentId, updateData) => {
   }
 };
 
-// 🗑️ ELIMINAR PAGO - Ahora en subcolección del usuario
+// 🗑️ ELIMINAR PAGO - CORREGIDO: Usar mismo userId
 export const deletePayment = async (paymentId) => {
   try {
-    // Necesitamos el userId para la ruta correcta
+    // Obtener userId consistente (UID, no email)
     const { auth } = await import('../firebase');
     const currentUser = auth.currentUser;
     
@@ -92,56 +94,14 @@ export const deletePayment = async (paymentId) => {
       throw new Error('Usuario no autenticado');
     }
     
+    // USAR UID en lugar de email para consistencia
+    const userId = currentUser.uid;
+    
     // Eliminar desde payments/{userId}/userPayments/{paymentId}
-    const paymentRef = doc(db, 'payments', currentUser.email, 'userPayments', paymentId);
+    const paymentRef = doc(db, 'payments', userId, 'userPayments', paymentId);
     await deleteDoc(paymentRef);
     return { success: true };
   } catch (error) {
-    return { success: false, error: error.message };
-  }
-};
-
-// 🔄 MIGRAR DATOS EXISTENTES (función temporal)
-export const migrateUserPayments = async () => {
-  try {
-    const { auth } = await import('../firebase');
-    const currentUser = auth.currentUser;
-    
-    if (!currentUser) {
-      throw new Error('Usuario no autenticado para migración');
-    }
-    
-    console.log('🔄 Iniciando migración para:', currentUser.email);
-    
-    // 1. Obtener pagos de la colección antigua
-    const oldPaymentsRef = collection(db, 'payments');
-    const q = query(oldPaymentsRef, where('userId', '==', currentUser.email));
-    const querySnapshot = await getDocs(q);
-    
-    console.log('🔄 Pagos encontrados para migrar:', querySnapshot.size);
-    
-    // 2. Migrar cada pago a la nueva estructura
-    const userPaymentsRef = collection(db, 'payments', currentUser.email, 'userPayments');
-    
-    for (const docSnapshot of querySnapshot.docs) {
-      const data = docSnapshot.data();
-      
-      // Eliminar userId ya que ahora está implícito en la ruta
-      const { userId, ...paymentData } = data;
-      
-      // Crear en nueva ubicación
-      await addDoc(userPaymentsRef, paymentData);
-      
-      // Eliminar de ubicación antigua
-      await deleteDoc(doc(db, 'payments', docSnapshot.id));
-      
-      console.log('🔄 Migrado pago:', docSnapshot.id);
-    }
-    
-    console.log('✅ Migración completada');
-    return { success: true, migratedCount: querySnapshot.size };
-  } catch (error) {
-    console.error('❌ Error en migración:', error);
     return { success: false, error: error.message };
   }
 };
