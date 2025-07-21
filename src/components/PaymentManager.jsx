@@ -643,33 +643,50 @@ const PaymentManager = () => {
     }
   };
 
-  // Marcar como pagado
-  const markAsPaid = (id) => {
-    const payment = payments.find(p => p.id === id);
-    if (!payment) return;
+// Marcar como pagado
+const markAsPaid = (id) => {
+  const payment = payments.find(p => p.id === id);
+  if (!payment) return;
 
-    // Si es tarjeta de crédito, verificar si ya pagó este mes
-    if (payment.category === 'tarjetas') {
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
-      
-      const alreadyPaidThisMonth = payment.paymentHistory?.some(record => {
-        const recordDate = new Date(record.date);
-        return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
-      });
+  // Si es tarjeta de crédito, verificar si ya pagó este mes
+  if (payment.category === 'tarjetas') {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const alreadyPaidThisMonth = payment.paymentHistory?.some(record => {
+      const recordDate = new Date(record.date);
+      return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+    });
 
-      if (alreadyPaidThisMonth) {
-        // Mostrar modal para pago adicional en tarjetas
-        setAdvancedPaymentData({ payment, type: 'additionalPayment' });
-        setShowAdvancedPayment(true);
-        return;
-      }
-
-      // Si no ha pagado este mes, ir directo al modal de pago variable
-      setVariablePaymentData(payment);
-      setCustomAmount(payment.amount.toString());
-      setShowVariablePayment(true);
+    if (alreadyPaidThisMonth) {
+      // Mostrar modal para pago adicional en tarjetas
+      setAdvancedPaymentData({ payment, type: 'additionalPayment' });
+      setShowAdvancedPayment(true);
       return;
+    }
+
+    // Si no ha pagado este mes, ir directo al modal de pago variable
+    setVariablePaymentData(payment);
+    setCustomAmount(payment.amount.toString());
+    setShowVariablePayment(true);
+    return;
+  }
+
+    // NUEVO: Si es préstamo, casa comercial o servicio, verificar si ya pagó este mes
+    if (!payment.isSubscription && payment.category !== 'tarjetas') {
+      // Verificar si ya pagó la cuota de este mes
+      if (payment.currentMonthPaid && payment.lastPaidAt) {
+        const lastPaidDate = new Date(payment.lastPaidAt);
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        
+        // Si pagó este mes, ofrecer pago adicional
+        if (lastPaidDate.getMonth() === currentMonth && lastPaidDate.getFullYear() === currentYear) {
+          setAdvancedPaymentData({ payment, type: 'additionalQuota' });
+          setShowAdvancedPayment(true);
+          return;
+        }
+      }
     }
 
     // Si es suscripción o telefonía, verificar si ya pagó este mes
@@ -1789,6 +1806,8 @@ const PaymentManager = () => {
                 <p className="text-sm text-blue-600 font-medium">
                   {advancedPaymentData?.type === 'additionalPayment' 
                     ? '¿Deseas registrar otro pago más para la tarjeta este mes?'
+                    : advancedPaymentData?.type === 'additionalQuota'
+                    ? '¿Deseas registrar otro pago más para este mes?'
                     : '¿Deseas registrar un pago anticipado para el próximo mes?'
                   }
                 </p>
@@ -1808,6 +1827,11 @@ const PaymentManager = () => {
                       setCustomAmount(advancedPaymentData.payment.amount.toString());
                       setShowVariablePayment(true);
                       setShowAdvancedPayment(false);
+                    } else if (advancedPaymentData?.type === 'additionalQuota') {
+                      // Para préstamos/casas, confirmar pago normal
+                      setPaymentToConfirm(advancedPaymentData.payment.id);
+                      setShowConfirmPayment(true);
+                      setShowAdvancedPayment(false);
                     } else {
                       // Para suscripciones, pago anticipado
                       confirmAdvancedPayment();
@@ -1815,7 +1839,9 @@ const PaymentManager = () => {
                   }}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
                 >
-                  {advancedPaymentData?.type === 'additionalPayment' ? 'SÍ, PAGAR' : 'SÍ, PAGO ANTICIPADO'}
+                  {advancedPaymentData?.type === 'additionalPayment' ? 'SÍ, PAGAR' : 
+                  advancedPaymentData?.type === 'additionalQuota' ? 'SÍ, PAGAR' :
+                  'SÍ, PAGO ANTICIPADO'}
                 </button>
               </div>
             </div>
