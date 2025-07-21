@@ -520,12 +520,17 @@ const PaymentManager = () => {
   };
 
   // Eliminar pago
-  const handleDelete = () => {
-    if (deleteType === 'completed') {
-      setCompletedPayments(prev => prev.filter(p => p.id !== itemToDelete));
+  const handleDelete = async () => {
+    // 🔥 ELIMINAR EN FIREBASE
+    const result = await deletePayment(itemToDelete);
+    
+    if (result.success) {
+      // Recargar datos desde Firebase
+      await loadUserData(currentUser.uid);
     } else {
-      setPayments(prev => prev.filter(p => p.id !== itemToDelete));
+      alert('Error al eliminar: ' + result.error);
     }
+
     setShowDeleteConfirm(false);
     setItemToDelete(null);
     setDeleteType('');
@@ -537,16 +542,21 @@ const PaymentManager = () => {
     setShowCancelSubscription(true);
   };
 
-  const confirmCancelSubscription = () => {
+  const confirmCancelSubscription = async () => {
     const subscription = payments.find(p => p.id === subscriptionToCancel);
     if (subscription) {
-      setCompletedPayments(prev => [...prev, { 
-        ...subscription, 
+      // 🔥 MARCAR COMO CANCELADA EN FIREBASE
+      const result = await updatePayment(subscription.id, {
         completedAt: new Date().toISOString(),
         cancelledAt: new Date().toISOString()
-      }]);
-      
-      setPayments(prev => prev.filter(p => p.id !== subscriptionToCancel));
+      });
+
+      if (result.success) {
+        // Recargar datos desde Firebase
+        await loadUserData(currentUser.uid);
+      } else {
+        alert('Error al cancelar: ' + result.error);
+      }
     }
     
     setShowCancelSubscription(false);
@@ -862,7 +872,7 @@ const PaymentManager = () => {
   };
 
   // Guardar cambios de edición
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editFormData.name || !editFormData.amount || !editFormData.startDate) {
       alert('Por favor completa todos los campos obligatorios');
       return;
@@ -873,9 +883,31 @@ const PaymentManager = () => {
       return;
     }
 
-    setPayments(prev =>
-      prev.map(p => (p.id === editFormData.id ? { ...editFormData } : p))
-    );
+    // 🔥 ACTUALIZAR EN FIREBASE
+    const dataToUpdate = {
+      name: editFormData.name,
+      amount: parseInt(editFormData.amount),
+      startDate: editFormData.startDate,
+      category: editFormData.category,
+      dueDay: editFormData.dueDay,
+      comments: editFormData.comments || '',
+      isSubscription: editFormData.isSubscription
+    };
+
+    // Agregar campos específicos para cuotas
+    if (!editFormData.isSubscription) {
+      dataToUpdate.totalQuotas = editFormData.totalQuotas;
+      dataToUpdate.firstPaymentMonth = editFormData.firstPaymentMonth;
+    }
+
+    const result = await updatePayment(editFormData.id, dataToUpdate);
+    
+    if (result.success) {
+      // Recargar datos desde Firebase
+      await loadUserData(currentUser.uid);
+    } else {
+      alert('Error al actualizar: ' + result.error);
+    }
 
     setShowEditForm(false);
     setEditFormData(null);
