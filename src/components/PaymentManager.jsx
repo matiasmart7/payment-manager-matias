@@ -673,7 +673,7 @@ const PaymentManager = () => {
   };
 
   // Confirmar pago
-  const confirmPayment = () => {
+  const confirmPayment = async () => {
     const paymentIndex = payments.findIndex(p => p.id === paymentToConfirm);
     if (paymentIndex === -1) return;
 
@@ -694,9 +694,19 @@ const PaymentManager = () => {
         paymentHistory: [...(payment.paymentHistory || []), paymentRecord]
       };
       
-      setPayments(payments.map(p => 
-        p.id === paymentToConfirm ? updatedPayment : p
-      ));
+      // 🔥 ACTUALIZAR EN FIREBASE
+      const result = await updatePayment(payment.id, {
+        currentMonthPaid: true,
+        lastPaidAt: updatedPayment.lastPaidAt,
+        paymentHistory: updatedPayment.paymentHistory
+      });
+
+      if (result.success) {
+        // Recargar datos desde Firebase
+        await loadUserData(currentUser.uid);
+      } else {
+        alert('Error al actualizar: ' + result.error);
+      }
     } else {
       const updatedPayment = {
         ...payment,
@@ -707,25 +717,38 @@ const PaymentManager = () => {
       const isCompleted = updatedPayment.paidQuotas >= updatedPayment.totalQuotas;
 
       if (isCompleted) {
-        setCompletedPayments(prev => {
-          const alreadyExists = prev.some(p => p.id === updatedPayment.id);
-          if (!alreadyExists) {
-            return [...prev, { ...updatedPayment, completedAt: new Date().toISOString() }];
-          }
-          return prev;
+        // 🔥 MARCAR COMO COMPLETADO EN FIREBASE
+        const result = await updatePayment(payment.id, {
+          paidQuotas: updatedPayment.paidQuotas,
+          currentMonthPaid: true,
+          completedAt: new Date().toISOString()
         });
-        setPayments(payments.filter(p => p.id !== paymentToConfirm));
+
+        if (result.success) {
+          await loadUserData(currentUser.uid);
+        } else {
+          alert('Error al completar: ' + result.error);
+        }
       } else {
         const nextPaymentDate = calculateNextPaymentMonth(
           updatedPayment.startDate,
           updatedPayment.paidQuotas,
           updatedPayment.firstPaymentMonth
         );
-        updatedPayment.nextPaymentMonth = getMonthName(nextPaymentDate.getMonth());
+        const nextPaymentMonth = getMonthName(nextPaymentDate.getMonth());
         
-        setPayments(payments.map(p => 
-          p.id === paymentToConfirm ? updatedPayment : p
-        ));
+        // 🔥 ACTUALIZAR EN FIREBASE
+        const result = await updatePayment(payment.id, {
+          paidQuotas: updatedPayment.paidQuotas,
+          currentMonthPaid: true,
+          nextPaymentMonth: nextPaymentMonth
+        });
+
+        if (result.success) {
+          await loadUserData(currentUser.uid);
+        } else {
+          alert('Error al actualizar: ' + result.error);
+        }
       }
     }
 
@@ -734,7 +757,7 @@ const PaymentManager = () => {
   };
 
   // Confirmar pago anticipado
-  const confirmAdvancedPayment = () => {
+  const confirmAdvancedPayment = async () => {
     const { payment } = advancedPaymentData;
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -745,14 +768,19 @@ const PaymentManager = () => {
       month: nextMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
     };
 
-    const updatedPayment = {
-      ...payment,
-      paymentHistory: [...(payment.paymentHistory || []), paymentRecord]
-    };
+    const updatedPaymentHistory = [...(payment.paymentHistory || []), paymentRecord];
     
-    setPayments(payments.map(p => 
-      p.id === payment.id ? updatedPayment : p
-    ));
+    // 🔥 ACTUALIZAR EN FIREBASE
+    const result = await updatePayment(payment.id, {
+      paymentHistory: updatedPaymentHistory
+    });
+
+    if (result.success) {
+      // Recargar datos desde Firebase
+      await loadUserData(currentUser.uid);
+    } else {
+      alert('Error al actualizar: ' + result.error);
+    }
 
     setShowAdvancedPayment(false);
     setAdvancedPaymentData(null);
