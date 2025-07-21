@@ -41,7 +41,7 @@ const PasswordReset = ({ onBack }) => {
             <h2 className="text-2xl font-bold text-gray-800 mb-4">Email enviado</h2>
             <p className="text-gray-600 mb-6">
               Hemos enviado un email de recuperación a <strong>{email}</strong>. 
-              Revisa tu bandeja de entrada y sigue las instrucciones para restablecer tu contraseña.
+              Revisa tu bandeja de entrada o de Spam y sigue las instrucciones para restablecer tu contraseña.
             </p>
             <div className="space-y-4">
               <button
