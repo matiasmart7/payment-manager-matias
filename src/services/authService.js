@@ -4,7 +4,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signOut,
-  onAuthStateChanged 
+  onAuthStateChanged,
+  sendPasswordResetEmail // ← Para resetear pass
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -135,26 +136,53 @@ export const logoutUser = async () => {
   }
 };
 
-// 👀 OBSERVER MODIFICADO - Incluir información de rol
-export const onAuthStateChange = (callback) => {
-  return onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      // Obtener información adicional del usuario
-      const userDoc = await getDoc(doc(db, 'users', user.email));
-      
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        callback({
-          ...user,
-          role: userData.role,
-          status: userData.status
-        });
+  // 👀 OBSERVER MODIFICADO - Incluir información de rol
+  export const onAuthStateChange = (callback) => {
+    return onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Obtener información adicional del usuario
+        const userDoc = await getDoc(doc(db, 'users', user.email));
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          callback({
+            ...user,
+            role: userData.role,
+            status: userData.status
+          });
+        } else {
+          // Usuario no aprobado
+          callback(null);
+        }
       } else {
-        // Usuario no aprobado
         callback(null);
       }
-    } else {
-      callback(null);
+    });
+  };
+
+// 🔑 RECUPERACIÓN DE CONTRASEÑA
+export const resetPassword = async (email) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    
+    return {
+      success: true,
+      message: 'Email de recuperación enviado. Revisa tu bandeja de entrada.'
+    };
+  } catch (error) {
+    let errorMessage = error.message;
+    
+    if (error.code === 'auth/user-not-found') {
+      errorMessage = 'No existe una cuenta con este email.';
+    } else if (error.code === 'auth/invalid-email') {
+      errorMessage = 'Email inválido.';
+    } else if (error.code === 'auth/too-many-requests') {
+      errorMessage = 'Demasiados intentos. Intenta más tarde.';
     }
-  });
+    
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
 };

@@ -3,6 +3,8 @@ import { onAuthStateChange, loginUser, logoutUser } from '../services/authServic
 import { getUserPayments, savePayment, updatePayment, deletePayment } from '../services/paymentService';
 import AdminPanel from './AdminPanel.jsx';
 import { getUserRole } from '../services/adminService';
+import PasswordReset from './PasswordReset.jsx';
+import { resetPassword } from '../services/authService';
 import {
   Plus,
   Check,
@@ -77,7 +79,7 @@ const PaymentManager = () => {
   const [advancedPaymentData, setAdvancedPaymentData] = useState(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [userRole, setUserRole] = useState(null);
-
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
   // 🏷️ CONFIGURACIÓN DE CATEGORÍAS
   const categories = {
     tarjetas: {
@@ -1050,11 +1052,20 @@ const markAsPaid = (id) => {
             >
               Crear Cuenta
             </button>
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-sm text-yellow-800">
-                <strong>Credenciales de prueba:</strong><br/>
-                Usuario: Ingresa Correo<br/>
-                Contraseña: Contraseña Creada
+
+              {/* Agregar este enlace */}
+              <button
+                onClick={() => setShowPasswordReset(true)}
+                className="w-full text-orange-600 hover:text-orange-800 py-2 text-sm transition-colors mt-2"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-black-800">
+                <strong>Sistema Seguimiento de Pagos </strong><br/>
+                developed by<br/>
+                MATIASMART
               </p>
             </div>
           </div>
@@ -2381,6 +2392,10 @@ const markAsPaid = (id) => {
               currentUser={currentUser}
               onClose={() => setShowAdminPanel(false)}
             />
+          )}
+          {/* Modal de recuperación de contraseña */}
+          {showPasswordReset && (
+            <PasswordReset onBack={() => setShowPasswordReset(false)} />
           )}        
       </div>
     </div>
