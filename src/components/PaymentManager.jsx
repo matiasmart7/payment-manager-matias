@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChange, loginUser, logoutUser } from '../services/authService';
 import { getUserPayments, savePayment, updatePayment, deletePayment } from '../services/paymentService';
+import AdminPanel from './AdminPanel';
+import { getUserRole } from '../services/adminService';
 import {
   Plus,
   Check,
@@ -25,7 +27,8 @@ import {
   Music,
   Building,
   AlertCircle,
-  Clock
+  Clock,
+  Crown
 } from 'lucide-react';
 
 const PaymentManager = () => {
@@ -72,6 +75,8 @@ const PaymentManager = () => {
   const [searchCompletedPayments, setSearchCompletedPayments] = useState('');
   const [showAdvancedPayment, setShowAdvancedPayment] = useState(false);
   const [advancedPaymentData, setAdvancedPaymentData] = useState(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [userRole, setUserRole] = useState(null);
 
   // 🏷️ CONFIGURACIÓN DE CATEGORÍAS
   const categories = {
@@ -374,15 +379,18 @@ const getUpcomingDueDates = () => {
     }
   }, [formData.category]);
 
+  // UseEffect actual de onAuthStateChange:
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((user) => {
+    const unsubscribe = onAuthStateChange(async (user) => {
       if (user) {
         setCurrentUser(user);
         setIsAuthenticated(true);
+        setUserRole(user.role); // Agregado
         loadUserData(user.uid);
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        setUserRole(null); // Agregado
         setPayments([]);
         setCompletedPayments([]);
       }
@@ -1066,8 +1074,29 @@ const markAsPaid = (id) => {
 
         {/* Header */}
         <header className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">Gestor de Pagos Mensuales</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl font-bold text-gray-800">Gestor de Pagos Mensuales</h1>
+            {/* Mostrar rol del usuario */}
+            {userRole && (
+              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                userRole === 'admin' 
+                  ? 'bg-purple-100 text-purple-600 border border-purple-200' 
+                  : 'bg-blue-100 text-blue-600 border border-blue-200'
+              }`}>
+                Usuario: {userRole === 'admin' ? '👑 Admin' : '👤 Usuario'}
+              </div>
+            )}
+          </div>
           <div className="flex gap-2">
+            {/* Botón Admin (solo para admins) */}
+            {userRole === 'admin' && (
+              <button
+                onClick={() => setShowAdminPanel(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Crown size={18} /> Panel Admin
+              </button>
+            )}
             <button
               onClick={() => setShowForm(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
@@ -1081,7 +1110,6 @@ const markAsPaid = (id) => {
               >
                 <Settings size={18} /> Ajustes
               </button>
-
               {/* Menú de ajustes mejorado */}
               {showSettingsMenu && (
                 <div className="absolute bg-white rounded shadow-lg z-50 w-80 mt-2 right-0">
@@ -2347,6 +2375,13 @@ const markAsPaid = (id) => {
             </div>
           </div>
         )}
+          {/* Modal Admin Panel */}
+          {showAdminPanel && (
+            <AdminPanel
+              currentUser={currentUser}
+              onClose={() => setShowAdminPanel(false)}
+            />
+          )}        
       </div>
     </div>
   );
