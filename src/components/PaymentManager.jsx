@@ -166,63 +166,78 @@ const PaymentManager = () => {
     return stats;
   };
 
-  // 📅 Función para obtener próximos vencimientos
-  const getUpcomingDueDates = () => {
-    const today = new Date();
-    const currentDay = today.getDate();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    
-    return payments
-      .filter(payment => payment.dueDay)
-      .map(payment => {
-        let daysUntilDue;
+// 📅 Función para obtener próximos vencimientos
+const getUpcomingDueDates = () => {
+  const today = new Date();
+  const currentDay = today.getDate();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
+  
+  return payments
+    .filter(payment => payment.dueDay)
+    .map(payment => {
+      let daysUntilDue;
+      
+      // Para suscripciones, telefonía Y TARJETAS, verificar si ya pagó este mes
+      if (payment.isSubscription || payment.category === 'tarjetas') {
+        const alreadyPaidThisMonth = payment.paymentHistory?.some(record => {
+          const recordDate = new Date(record.date);
+          return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
+        });
         
-        // Para suscripciones, telefonía Y TARJETAS, verificar si ya pagó este mes
-        if (payment.isSubscription || payment.category === 'tarjetas') {
-          const alreadyPaidThisMonth = payment.paymentHistory?.some(record => {
-            const recordDate = new Date(record.date);
-            return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
-          });
+        // Si ya pagó este mes, no mostrar en próximos vencimientos
+        if (alreadyPaidThisMonth) {
+          return null;
+        }
+      }
+      
+      // Para cuotas tradicionales (préstamos, casas comerciales, servicios)
+      if (!payment.isSubscription && payment.category !== 'tarjetas') {
+        // Si está completado, no mostrar
+        if (payment.paidQuotas >= payment.totalQuotas) {
+          return null;
+        }
+        
+        // Verificar si ya pagó la cuota de ESTE PERÍODO de vencimiento (igual que en markAsPaid)
+        if (payment.currentMonthPaid && payment.lastPaidAt) {
+          const lastPaidDate = new Date(payment.lastPaidAt);
           
-          // Si ya pagó este mes, no mostrar en próximos vencimientos
-          if (alreadyPaidThisMonth) {
-            return null;
-          }
-        }
-        
-        // Para cuotas tradicionales (préstamos, casas comerciales, servicios)
-        if (!payment.isSubscription && payment.category !== 'tarjetas') {
-          // Si está completado, no mostrar
-          if (payment.paidQuotas >= payment.totalQuotas) {
-            return null;
+          // Si pagó después del último vencimiento, no mostrar
+          let lastDueDate;
+          if (currentDay >= payment.dueDay) {
+            // Ya pasó el vencimiento de este mes
+            lastDueDate = new Date(currentYear, currentMonth, payment.dueDay);
+          } else {
+            // Aún no llega el vencimiento de este mes
+            lastDueDate = new Date(currentYear, currentMonth - 1, payment.dueDay);
           }
           
-          // Si ya pagó la cuota de este mes, no mostrar
-          if (payment.currentMonthPaid) {
+          // Si pagó después del último vencimiento, no mostrar
+          if (lastPaidDate >= lastDueDate) {
             return null;
           }
         }
-        
-        // Si el día de vencimiento ya pasó este mes, calcular para el próximo mes
-        if (payment.dueDay < currentDay) {
-          const nextMonthDue = new Date(currentYear, currentMonth + 1, payment.dueDay);
-          const diffTime = nextMonthDue - today;
-          daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        } else {
-          // Si el día de vencimiento es hoy o futuro este mes
-          daysUntilDue = payment.dueDay - currentDay;
-        }
-        
-        return {
-          ...payment,
-          daysUntilDue
-        };
-      })
-      .filter(payment => payment !== null && payment.daysUntilDue <= 7) // Mostrar solo los próximos 7 días
-      .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
-      .slice(0, 5);
-  };
+      }
+      
+      // Si el día de vencimiento ya pasó este mes, calcular para el próximo mes
+      if (payment.dueDay < currentDay) {
+        const nextMonthDue = new Date(currentYear, currentMonth + 1, payment.dueDay);
+        const diffTime = nextMonthDue - today;
+        daysUntilDue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      } else {
+        // Si el día de vencimiento es hoy o futuro este mes
+        daysUntilDue = payment.dueDay - currentDay;
+      }
+      
+      return {
+        ...payment,
+        daysUntilDue
+      };
+    })
+    .filter(payment => payment !== null && payment.daysUntilDue <= 7) // Mostrar solo los próximos 7 días
+    .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
+    .slice(0, 5);
+};
 
   // 🔄 FUNCIONES DE PERSISTENCIA LOCAL 
   const saveToLocalStorage = (paymentsData, completedData, authStatus) => {
@@ -735,9 +750,10 @@ const markAsPaid = (id) => {
       
       // 🔥 ACTUALIZAR EN FIREBASE
       const result = await updatePayment(payment.id, {
+        paidQuotas: updatedPayment.paidQuotas,
         currentMonthPaid: true,
-        lastPaidAt: updatedPayment.lastPaidAt,
-        paymentHistory: updatedPayment.paymentHistory
+        lastPaidAt: new Date().toISOString(), // ← AGREGAR ESTO
+        nextPaymentMonth: nextPaymentMonth
       });
 
       if (result.success) {
@@ -760,6 +776,7 @@ const markAsPaid = (id) => {
         const result = await updatePayment(payment.id, {
           paidQuotas: updatedPayment.paidQuotas,
           currentMonthPaid: true,
+          lastPaidAt: new Date().toISOString(), // ← AGREGAR ESTO
           completedAt: new Date().toISOString()
         });
 
