@@ -178,8 +178,8 @@ const PaymentManager = () => {
       .map(payment => {
         let daysUntilDue;
         
-        // Para suscripciones y telefonía, verificar si ya pagó este mes
-        if (payment.isSubscription) {
+        // Para suscripciones, telefonía Y TARJETAS, verificar si ya pagó este mes
+        if (payment.isSubscription || payment.category === 'tarjetas') {
           const alreadyPaidThisMonth = payment.paymentHistory?.some(record => {
             const recordDate = new Date(record.date);
             return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
@@ -187,6 +187,19 @@ const PaymentManager = () => {
           
           // Si ya pagó este mes, no mostrar en próximos vencimientos
           if (alreadyPaidThisMonth) {
+            return null;
+          }
+        }
+        
+        // Para cuotas tradicionales (préstamos, casas comerciales, servicios)
+        if (!payment.isSubscription && payment.category !== 'tarjetas') {
+          // Si está completado, no mostrar
+          if (payment.paidQuotas >= payment.totalQuotas) {
+            return null;
+          }
+          
+          // Si ya pagó la cuota de este mes, no mostrar
+          if (payment.currentMonthPaid) {
             return null;
           }
         }
@@ -346,7 +359,6 @@ const PaymentManager = () => {
     }
   }, [formData.category]);
 
-  // Agregar este useEffect DESPUÉS de tus otros useEffect
   useEffect(() => {
     const unsubscribe = onAuthStateChange((user) => {
       if (user) {
