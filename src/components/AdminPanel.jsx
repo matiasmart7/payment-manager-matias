@@ -5,7 +5,9 @@ import {
   rejectUser, 
   getAllUsers,
   changeUserRole,
-  deleteUser 
+  deleteUser,
+  updateUserProfile,
+  changeUserStatus
 } from '../services/adminService';
 import { 
   Users, 
@@ -17,7 +19,11 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  Settings
+  Settings,
+  Edit,
+  Save,
+  X as CloseIcon,
+  Lock
 } from 'lucide-react';
 
 const AdminPanel = ({ currentUser, onClose }) => {
@@ -25,6 +31,12 @@ const AdminPanel = ({ currentUser, onClose }) => {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editFormData, setEditFormData] = useState({
+    firstName: '',
+    lastName: '',
+    gender: 'M'
+  });
 
   // Cargar datos
   const loadPendingUsers = async () => {
@@ -93,6 +105,22 @@ const AdminPanel = ({ currentUser, onClose }) => {
     }
   };
 
+  // Cambiar estado
+  const handleStatusChange = async (userEmail, newStatus) => {
+    if (userEmail === currentUser.email) {
+      alert('No puedes cambiar tu propio estado');
+      return;
+    }
+
+    const result = await changeUserStatus(userEmail, newStatus, currentUser.email);
+    if (result.success) {
+      alert(`✅ Estado de ${userEmail} cambiado a ${newStatus}`);
+      loadAllUsers();
+    } else {
+      alert(`❌ Error: ${result.error}`);
+    }
+  };
+
   // Eliminar usuario
   const handleDeleteUser = async (userEmail) => {
     if (userEmail === currentUser.email) {
@@ -100,7 +128,14 @@ const AdminPanel = ({ currentUser, onClose }) => {
       return;
     }
 
-    if (confirm(`¿Eliminar usuario ${userEmail}? Esta acción no se puede deshacer.`)) {
+    if (confirm(`¿Eliminar usuario ${userEmail}? 
+
+⚠️ IMPORTANTE: Esto eliminará:
+- Sus datos de perfil
+- Todos sus pagos
+- Su acceso al sistema
+
+Nota: El email seguirá registrado en Firebase Auth.`)) {
       const result = await deleteUser(userEmail);
       if (result.success) {
         alert(`🗑️ Usuario ${userEmail} eliminado`);
@@ -111,9 +146,37 @@ const AdminPanel = ({ currentUser, onClose }) => {
     }
   };
 
+  // Abrir edición de perfil
+  const openEditProfile = (user) => {
+    setEditingUser(user.email);
+    setEditFormData({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      gender: user.gender || 'M'
+    });
+  };
+
+  // Guardar edición de perfil
+  const handleSaveProfile = async () => {
+    const result = await updateUserProfile(editingUser, editFormData, currentUser.email);
+    if (result.success) {
+      alert(`✅ ${result.message}`);
+      setEditingUser(null);
+      loadAllUsers();
+    } else {
+      alert(`❌ Error: ${result.error}`);
+    }
+  };
+
+  // Cancelar edición
+  const cancelEdit = () => {
+    setEditingUser(null);
+    setEditFormData({ firstName: '', lastName: '', gender: 'M' });
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden">
         
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-purple-600 to-blue-600 text-white">
@@ -180,9 +243,11 @@ const AdminPanel = ({ currentUser, onClose }) => {
                     <div className="flex justify-between items-center">
                       <div>
                         <h3 className="font-semibold text-gray-800">{user.email}</h3>
-                        <p className="text-sm text-gray-600">
-                          Solicitado: {new Date(user.requestedAt).toLocaleString()}
-                        </p>
+                        <div className="text-sm text-gray-600 space-y-1">
+                          <p>Nombre: {user.firstName} {user.lastName}</p>
+                          <p>Sexo: {user.gender === 'M' ? 'Masculino' : 'Femenino'}</p>
+                          <p>Solicitado: {new Date(user.requestedAt).toLocaleString()}</p>
+                        </div>
                       </div>
                       <div className="flex gap-2">
                         <select
@@ -224,61 +289,160 @@ const AdminPanel = ({ currentUser, onClose }) => {
               ) : (
                 allUsers.map((user) => (
                   <div key={user.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-full ${
-                          user.role === 'admin' ? 'bg-purple-100' : 'bg-blue-100'
-                        }`}>
-                          {user.role === 'admin' ? (
-                            <Crown className="text-purple-600" size={18} />
-                          ) : (
-                            <Users className="text-blue-600" size={18} />
-                          )}
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-                            {user.email}
-                            {user.email === currentUser.email && (
-                              <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-                                Tú
-                              </span>
-                            )}
-                          </h3>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span className={`px-2 py-0.5 rounded-full text-xs ${
-                              user.role === 'admin' 
-                                ? 'bg-purple-100 text-purple-600' 
-                                : 'bg-blue-100 text-blue-600'
-                            }`}>
-                              {user.role === 'admin' ? '👑 Admin' : '👤 Usuario'}
-                            </span>
-                            <span>Creado: {new Date(user.createdAt).toLocaleDateString()}</span>
-                            {user.approvedBy && (
-                              <span>Aprobado por: {user.approvedBy}</span>
+                    {editingUser === user.email ? (
+                      // Modo edición
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className={`p-2 rounded-full ${
+                            user.role === 'admin' ? 'bg-purple-100' : 'bg-blue-100'
+                          }`}>
+                            {user.role === 'admin' ? (
+                              <Crown className="text-purple-600" size={18} />
+                            ) : (
+                              <Users className="text-blue-600" size={18} />
                             )}
                           </div>
+                          <div>
+                            <h3 className="font-semibold text-gray-800">{user.email}</h3>
+                            <p className="text-sm text-gray-500">Editando perfil</p>
+                          </div>
                         </div>
-                      </div>
-
-                      {user.email !== currentUser.email && (
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                            <input
+                              type="text"
+                              value={editFormData.firstName}
+                              onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Nombre"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Apellido</label>
+                            <input
+                              type="text"
+                              value={editFormData.lastName}
+                              onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Apellido"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
+                            <select
+                              value={editFormData.gender}
+                              onChange={(e) => setEditFormData({ ...editFormData, gender: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="M">Masculino</option>
+                              <option value="F">Femenino</option>
+                            </select>
+                          </div>
+                        </div>
+                        
                         <div className="flex gap-2">
-                          <select
-                            value={user.role}
-                            onChange={(e) => handleRoleChange(user.email, e.target.value)}
-                            className="px-3 py-1 border rounded text-sm"
-                          >
-                            <option value="user">👤 Usuario</option>
-                            <option value="admin">👑 Admin</option>
-                          </select>
                           <button
-                            onClick={() => handleDeleteUser(user.email)}
-                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1"
+                            onClick={handleSaveProfile}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm flex items-center gap-1"
                           >
-                            <Trash2 size={14} /> Eliminar
+                            <Save size={14} /> Guardar
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="bg-gray-300 hover:bg-gray-400 text-gray-700 px-3 py-2 rounded text-sm flex items-center gap-1"
+                          >
+                            <CloseIcon size={14} /> Cancelar
                           </button>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      // Modo vista
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-full ${
+                            user.role === 'admin' ? 'bg-purple-100' : 'bg-blue-100'
+                          }`}>
+                            {user.role === 'admin' ? (
+                              <Crown className="text-purple-600" size={18} />
+                            ) : (
+                              <Users className="text-blue-600" size={18} />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                              {user.email}
+                              {user.email === currentUser.email && (
+                                <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+                                  Tú
+                                </span>
+                              )}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                                user.role === 'admin' 
+                                  ? 'bg-purple-100 text-purple-600' 
+                                  : 'bg-blue-100 text-blue-600'
+                              }`}>
+                                {user.role === 'admin' ? '👑 Admin' : '👤 Usuario'}
+                              </span>
+                              
+                              {/* Estado con desplegable */}
+                              <div className="flex items-center gap-2">
+                                <span>Estado:</span>
+                                <select
+                                  value={user.status}
+                                  onChange={(e) => handleStatusChange(user.email, e.target.value)}
+                                  disabled={user.email === currentUser.email}
+                                  className={`text-xs px-2 py-0.5 rounded-full border-0 ${
+                                    user.status === 'approved' ? 'bg-green-100 text-green-600' :
+                                    user.status === 'blocked' ? 'bg-red-100 text-red-600' :
+                                    'bg-gray-100 text-gray-600'
+                                  } ${user.email === currentUser.email ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                                >
+                                  <option value="approved">✅ Activo</option>
+                                  <option value="blocked">🚫 Bloqueado</option>
+                                </select>
+                              </div>
+                              
+                              {user.firstName && (
+                                <span>Nombre: {user.firstName} {user.lastName}</span>
+                              )}
+                              <span>Creado: {new Date(user.createdAt).toLocaleDateString()}</span>
+                              {user.approvedBy && (
+                                <span>Aprobado por: {user.approvedBy}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {user.email !== currentUser.email && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openEditProfile(user)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1"
+                            >
+                              <Edit size={14} /> Editar
+                            </button>
+                            <select
+                              value={user.role}
+                              onChange={(e) => handleRoleChange(user.email, e.target.value)}
+                              className="px-3 py-1 border rounded text-sm"
+                            >
+                              <option value="user">👤 Usuario</option>
+                              <option value="admin">👑 Admin</option>
+                            </select>
+                            <button
+                              onClick={() => handleDeleteUser(user.email)}
+                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1"
+                            >
+                              <Trash2 size={14} /> Eliminar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))
               )}

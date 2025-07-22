@@ -68,7 +68,14 @@ const PaymentManager = () => {
     dueDay: 1,
     isSubscription: false
   });
-
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [registerData, setRegisterData] = useState({
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+    gender: 'M'
+  });
   const [showEditForm, setShowEditForm] = useState(false);
   const [editFormData, setEditFormData] = useState(null);
   const [showActivePaymentsModal, setShowActivePaymentsModal] = useState(false);
@@ -489,19 +496,34 @@ const getUpcomingDueDates = () => {
     }
   };
 
-  // Agregar esta función junto a handleLogin
+  // Función actualizada para registro con perfil completo
   const handleRegister = async () => {
-    if (!loginData.username || !loginData.password) {
-      alert('Por favor completa todos los campos');
+    if (!registerData.email || !registerData.password || !registerData.firstName || !registerData.lastName) {
+      alert('Por favor completa todos los campos obligatorios');
       return;
     }
 
     const { registerUser } = await import('../services/authService');
-    const result = await registerUser(loginData.username, loginData.password);
+    const result = await registerUser(
+      registerData.email, 
+      registerData.password,
+      {
+        firstName: registerData.firstName,
+        lastName: registerData.lastName,
+        gender: registerData.gender
+      }
+    );
     
     if (result.success) {
-      alert('¡Cuenta creada exitosamente! Ahora puedes iniciar sesión.');
-      setLoginData({ username: '', password: '' });
+      alert(result.message || '¡Cuenta creada exitosamente! Espera la aprobación del administrador.');
+      setRegisterData({
+        email: '',
+        password: '',
+        firstName: '',
+        lastName: '',
+        gender: 'M'
+      });
+      setShowRegisterForm(false);
     } else {
       alert('Error al crear cuenta: ' + result.error);
     }
@@ -980,14 +1002,107 @@ const markAsPaid = (id) => {
       </div>
     );
   } 
-  
+
   if (!isAuthenticated) {
     return (
       <>
-        {/* Modal de recuperación de contraseña - AGREGAR AQUÍ */}
-        {showPasswordReset && (
-          <PasswordReset onBack={() => setShowPasswordReset(false)} />
-        )}
+      {/* Modal de recuperación de contraseña - AGREGAR AQUÍ */}
+      {showPasswordReset && (
+        <PasswordReset onBack={() => setShowPasswordReset(false)} />
+      )}
+
+      {/* Modal de registro - AGREGAR ESTE MODAL COMPLETO */}
+      {showRegisterForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Crear Cuenta</h2>
+              <button
+                onClick={() => setShowRegisterForm(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={registerData.email}
+                  onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="tu@email.com"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                <input
+                  type="password"
+                  value={registerData.password}
+                  onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ingresa tu contraseña"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                  <input
+                    type="text"
+                    value={registerData.firstName}
+                    onChange={(e) => setRegisterData({ ...registerData, firstName: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Juan"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Apellido</label>
+                  <input
+                    type="text"
+                    value={registerData.lastName}
+                    onChange={(e) => setRegisterData({ ...registerData, lastName: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Pérez"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
+                <select
+                  value={registerData.gender}
+                  onChange={(e) => setRegisterData({ ...registerData, gender: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowRegisterForm(false)}
+                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRegister}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Registrarse
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
           <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md">
@@ -1054,7 +1169,7 @@ const markAsPaid = (id) => {
                 Iniciar Sesión
               </button>
               <button
-                onClick={handleRegister}
+                onClick={() => setShowRegisterForm(true)}
                 className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg transition-colors mt-2"
               >
                 Crear Cuenta
@@ -1093,19 +1208,32 @@ const markAsPaid = (id) => {
 
         {/* Header */}
         <header className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-bold text-gray-800">Gestor de Pagos Mensuales</h1>
-            {/* Mostrar rol del usuario */}
-            {userRole && (
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                userRole === 'admin' 
-                  ? 'bg-purple-100 text-purple-600 border border-purple-200' 
-                  : 'bg-blue-100 text-blue-600 border border-blue-200'
-              }`}>
-                Usuario: {userRole === 'admin' ? '👑 Admin' : '👤 Usuario'}
-              </div>
-            )}
-          </div>
+        <div className="flex items-center gap-4">
+          <h1 className="text-3xl font-bold text-gray-800">Gestor de Pagos Mensuales</h1>
+          
+          {/* Saludo personalizado */}
+          {currentUser && currentUser.firstName && (
+            <div className="px-4 py-2 bg-gradient-to-r from-blue-100 to-purple-100 rounded-lg border border-blue-200">
+              <p className="text-sm font-medium text-gray-700">
+                ¡Hola, Bienvenido! 👋
+              </p>
+              <p className="text-lg font-bold text-blue-600">
+                {currentUser.firstName} {currentUser.lastName}
+              </p>
+            </div>
+          )}
+          
+          {/* Mostrar rol del usuario */}
+          {userRole && (
+            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+              userRole === 'admin' 
+                ? 'bg-purple-100 text-purple-600 border border-purple-200' 
+                : 'bg-blue-100 text-blue-600 border border-blue-200'
+            }`}>
+              Usuario: {userRole === 'admin' ? '👑 Admin' : '👤 Usuario'}
+            </div>
+          )}
+        </div>
           <div className="flex gap-2">
             {/* Botón Admin (solo para admins) */}
             {userRole === 'admin' && (

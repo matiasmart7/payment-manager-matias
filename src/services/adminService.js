@@ -64,14 +64,28 @@ export const getPendingRegistrations = async () => {
   }
 };
 
-// ✅ APROBAR USUARIO (Solo Admin)
+// ✅ APROBAR USUARIO (Solo Admin) - Con datos de perfil
 export const approveUser = async (registrationId, userData, assignedRole = 'user', adminEmail) => {
   try {
-    // 1. Crear usuario en colección users
+    const pendingDoc = await getDoc(doc(db, 'pending_registrations', registrationId));
+    
+    if (!pendingDoc.exists()) {
+      return {
+        success: false,
+        error: 'Solicitud no encontrada'
+      };
+    }
+
+    const pendingData = pendingDoc.data();
+
+    // 1. Crear usuario en colección users con datos de perfil
     await setDoc(doc(db, 'users', userData.email), {
       email: userData.email,
       role: assignedRole,
       status: 'approved',
+      firstName: pendingData.firstName || 'Usuario',
+      lastName: pendingData.lastName || 'Nuevo',
+      gender: pendingData.gender || 'M',
       createdAt: userData.requestedAt,
       approvedBy: adminEmail,
       approvedAt: new Date().toISOString()
@@ -82,7 +96,7 @@ export const approveUser = async (registrationId, userData, assignedRole = 'user
 
     return {
       success: true,
-      message: `Usuario ${userData.email} aprobado como ${assignedRole}`
+      message: `Usuario ${pendingData.firstName} ${pendingData.lastName} aprobado como ${assignedRole}`
     };
   } catch (error) {
     return {
@@ -135,6 +149,54 @@ export const getAllUsers = async () => {
   }
 };
 
+// 📝 EDITAR PERFIL DE USUARIO (Solo Admin)
+export const updateUserProfile = async (userEmail, profileData, adminEmail) => {
+  try {
+    const userRef = doc(db, 'users', userEmail);
+    
+    await updateDoc(userRef, {
+      firstName: profileData.firstName,
+      lastName: profileData.lastName,
+      gender: profileData.gender,
+      updatedBy: adminEmail,
+      updatedAt: new Date().toISOString()
+    });
+
+    return {
+      success: true,
+      message: `Perfil de ${profileData.firstName} ${profileData.lastName} actualizado`
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// 🔒 CAMBIAR ESTADO DE USUARIO (Solo Admin)
+export const changeUserStatus = async (userEmail, newStatus, adminEmail) => {
+  try {
+    const userRef = doc(db, 'users', userEmail);
+    
+    await updateDoc(userRef, {
+      status: newStatus,
+      statusChangedBy: adminEmail,
+      statusChangedAt: new Date().toISOString()
+    });
+
+    return {
+      success: true,
+      message: `Usuario ${userEmail} marcado como ${newStatus}`
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
 // 🔄 CAMBIAR ROL DE USUARIO (Solo Admin)
 export const changeUserRole = async (userEmail, newRole, adminEmail) => {
   try {
@@ -156,18 +218,34 @@ export const changeUserRole = async (userEmail, newRole, adminEmail) => {
   }
 };
 
-// 🗑️ ELIMINAR USUARIO (Solo Admin)
+// 🗑️ ELIMINAR USUARIO COMPLETO (Solo Admin)
 export const deleteUser = async (userEmail) => {
   try {
-    // Eliminar datos del usuario
+    // 1. Eliminar de Firestore (datos del usuario)
     await deleteDoc(doc(db, 'users', userEmail));
     
-    // TODO: También eliminar sus pagos
-    // await deleteDoc(doc(db, 'payments', userEmail));
+    // 2. Eliminar sus pagos también
+    try {
+      // Intentar eliminar la subcolección de pagos
+      const { getDocs, collection } = await import('firebase/firestore');
+      const { db } = await import('../firebase');
+      
+      const userPaymentsRef = collection(db, 'payments', userEmail, 'userPayments');
+      const paymentsSnapshot = await getDocs(userPaymentsRef);
+      
+      // Eliminar cada pago individual
+      const deletePromises = paymentsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      console.log(`✅ Pagos eliminados para ${userEmail}`);
+    } catch (paymentError) {
+      console.log(`⚠️ No se encontraron pagos para ${userEmail} o error al eliminar:`, paymentError);
+    }
 
     return {
       success: true,
-      message: `Usuario ${userEmail} eliminado`
+      message: `Usuario ${userEmail} eliminado completamente (datos y pagos)`,
+      warning: 'NOTA: El email aún existe en Firebase Auth. Para re-registrar el mismo email, debe crearse con contraseña diferente o contactar al administrador.'
     };
   } catch (error) {
     return {
