@@ -1208,9 +1208,21 @@ const markAsPaid = (id) => {
 
         {/* Header */}
         <header className="flex justify-between items-center mb-8">
-        <div className="flex items-center gap-4">
-          <h1 className="text-3xl font-bold text-gray-800">Gestor de Pagos Mensuales</h1>
-          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="bg-gradient-to-br from-blue-500 to-blue-700 p-3 rounded-2xl shadow-lg">
+                  <DollarSign className="text-white" size={28} />
+                </div>
+                <div className="absolute -top-1 -right-1 bg-green-500 w-3 h-3 rounded-full animate-pulse"></div>
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-800 tracking-tight">
+                  PayFlow <span className="text-blue-600">Manager</span>
+                </h1>
+                <p className="text-sm text-gray-600 font-medium">Gestión de Pagos Mensuales</p>
+              </div>
+            </div>
           {/* Saludo personalizado */}
           {currentUser && currentUser.firstName && (
             <div className="px-4 py-2 bg-gradient-to-r from-blue-100 to-purple-100 rounded-lg border border-blue-200">
