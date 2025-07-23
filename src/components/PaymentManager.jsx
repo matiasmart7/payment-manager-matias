@@ -1230,7 +1230,7 @@ const markAsPaid = (id) => {
                 ? 'bg-purple-100 text-purple-600 border border-purple-200' 
                 : 'bg-blue-100 text-blue-600 border border-blue-200'
             }`}>
-              Usuario: {userRole === 'admin' ? '👑 Admin' : '👤 Usuario'}
+              Usuario: {userRole === 'admin' ? '👑 Admin' : '👤 Activo'}
             </div>
           )}
         </div>
